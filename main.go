@@ -3,15 +3,31 @@ package main
 import (
 	"fmt"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/muesli/termenv"
+	"github.com/pkg/errors"
 	"github.com/spongeprojects/magicconch"
+	"log"
 	"os"
+	"path"
 	"strings"
 )
 
+const (
+	ModeDefault = ""    // replace soft link
+	ModeEnv     = "env" // print env instead of replace soft link
+)
+
 type model struct {
-	choices  []Candidate
-	cursor   int                 // indicates which choice our cursor is pointing at
-	selected map[string]struct{} // a map from full path to a struct, indicates which choices are selected
+	choices []Candidate
+	cursor  int // indicates which choice our cursor is pointing at
+
+	// current is the full path of current kubeconfig,
+	// current only works when mode == ModeDefault
+	current string
+
+	// selected is a map from full path to a struct, indicates which choices are selected,
+	// selected only works when mode == ModeEnv
+	selected map[string]struct{}
 }
 
 var initialModel = model{
@@ -19,16 +35,61 @@ var initialModel = model{
 	selected: make(map[string]struct{}),
 }
 
+var (
+	mode = os.Getenv("CF_MODE")
+
+	homeDir           = HomeDir()
+	kubeDir           = path.Join(homeDir, ".kube")
+	defaultConfigPath = path.Join(kubeDir, "config")
+	cfDir             = path.Join(kubeDir, "kubectl-cf")
+	configPath        = path.Join(cfDir, "config")
+)
+
 func init() {
+	_, err := os.Lstat(cfDir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			magicconch.Must(os.Mkdir(cfDir, 0755))
+		} else {
+			magicconch.Must(err)
+		}
+	}
+
 	choices, err := ListKubeconfigCandidates()
 	magicconch.Must(err)
 	initialModel.choices = choices
 
-	selected := make(map[string]struct{})
-	for _, c := range strings.Split(os.Getenv("KUBECONFIG"), ":") {
-		selected[c] = struct{}{}
+	debug("Running in mode: %s", mode)
+
+	if mode == ModeEnv {
+		selected := make(map[string]struct{})
+		for _, c := range strings.Split(os.Getenv("KUBECONFIG"), ":") {
+			selected[c] = struct{}{}
+		}
+		initialModel.selected = selected
+	} else if mode == ModeDefault {
+		info, err := os.Lstat(configPath)
+		if err != nil {
+			if !os.IsNotExist(err) {
+				panic(err)
+			}
+			debug("Config %s not exist, using the default config: %s", configPath, defaultConfigPath)
+			initialModel.current = defaultConfigPath
+		} else {
+			if info.Mode()&os.ModeSymlink == 0 {
+				// is not a symlink
+				debug("Config %s is not a symlink", configPath)
+				initialModel.current = configPath
+			} else {
+				// is a symlink
+				target, err := os.Readlink(configPath)
+				magicconch.Must(err)
+				debug("Config %s is a symlink to: %s", configPath, target)
+				initialModel.current = target
+			}
+		}
+		debug("Current config: %s", initialModel.current)
 	}
-	initialModel.selected = selected
 }
 
 func (m model) Init() tea.Cmd {
@@ -62,7 +123,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		// The spacebar (a literal space) toggle the selected state for the item that the cursor is pointing at.
 		case " ":
-			if m.cursor >= 0 && m.cursor < len(m.choices) {
+			if mode == ModeEnv {
 				choice := m.choices[m.cursor]
 				fullPath := choice.FullPath
 				if _, ok := m.selected[fullPath]; ok {
@@ -73,19 +134,33 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 
 		case "enter":
-			var ss []string
-			for s := range m.selected {
-				ss = append(ss, s)
+			if mode == ModeEnv {
+				var ss []string
+				for s := range m.selected {
+					ss = append(ss, s)
+				}
+				kubeconfig := strings.Join(ss, ":")
+				fmt.Printf("\nexport KUBECONFIG=%s\n", kubeconfig)
+				return m, tea.Quit
+			} else {
+				err := Symlink(m.choices[m.cursor].FullPath, configPath)
+				if err != nil {
+					log.Fatal(errors.Wrap(err, "Symlink error"))
+				}
+				fmt.Printf("\n%s is now symlink to %s\n",
+					termenv.String(configPath).Foreground(ColorProfile.Color("32")),
+					termenv.String(m.choices[m.cursor].FullPath).Foreground(ColorProfile.Color("32")))
+				if os.Getenv("KUBECONFIG") != configPath {
+					s := termenv.String(fmt.Sprintf("\nWARNING: You should set KUBECONFIG=%s to make it work.\n", configPath))
+					s = s.Foreground(ColorProfile.Color("1"))
+					fmt.Println(s)
+				}
+				return m, tea.Quit
 			}
-			kubeconfig := strings.Join(ss, ":")
-			fmt.Printf("export KUBECONFIG=%s\n", kubeconfig)
-			magicconch.Must(os.Setenv("KUBECONFIG", kubeconfig))
-			return m, tea.Quit
 		}
 	}
 
 	// Return the updated model to the Bubble Tea runtime for processing.
-	// Note that we're not returning a command.
 	return m, nil
 }
 
@@ -102,20 +177,27 @@ func (m model) View() string {
 			cursor = ">" // cursor!
 		}
 
-		// Is this choice selected?
-		checked := " " // not selected
-		if _, ok := m.selected[candidate.FullPath]; ok {
-			checked = "x" // selected!
+		prefix := ""
+		if mode == ModeEnv {
+			if _, ok := m.selected[candidate.FullPath]; ok {
+				prefix = "[x] " // selected!
+			} else {
+				prefix = "[ ] " // not selected
+			}
+		} else {
+			if candidate.FullPath == m.current {
+				prefix = "* "
+			} else {
+				prefix = "  "
+			}
 		}
 
-		// Render the row
-		s += fmt.Sprintf("%s [%s] %s\t%s\n", cursor, checked, candidate.Name, candidate.FullPath)
+		s += fmt.Sprintf("%s %s%s\t%s\n", cursor, prefix, candidate.Name, candidate.FullPath)
 	}
 
 	// The footer
 	s += "\nPress enter to confirm, press q to quit.\n"
 
-	// Send the UI for rendering
 	return s
 }
 
