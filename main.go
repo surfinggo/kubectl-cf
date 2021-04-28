@@ -9,12 +9,6 @@ import (
 	"log"
 	"os"
 	"path"
-	"strings"
-)
-
-const (
-	ModeDefault = ""    // replace soft link
-	ModeEnv     = "env" // print env instead of replace soft link
 )
 
 type model struct {
@@ -24,15 +18,10 @@ type model struct {
 	// current is the full path of current kubeconfig,
 	// current only works when mode == ModeDefault
 	current string
-
-	// selected is a map from full path to a struct, indicates which choices are selected,
-	// selected only works when mode == ModeEnv
-	selected map[string]struct{}
 }
 
 var initialModel = model{
-	choices:  make([]Candidate, 0),
-	selected: make(map[string]struct{}),
+	choices: make([]Candidate, 0),
 }
 
 var (
@@ -59,37 +48,27 @@ func init() {
 	magicconch.Must(err)
 	initialModel.choices = choices
 
-	debug("Running in mode: %s", mode)
-
-	if mode == ModeEnv {
-		selected := make(map[string]struct{})
-		for _, c := range strings.Split(os.Getenv("KUBECONFIG"), ":") {
-			selected[c] = struct{}{}
+	info, err := os.Lstat(configPath)
+	if err != nil {
+		if !os.IsNotExist(err) {
+			panic(err)
 		}
-		initialModel.selected = selected
-	} else if mode == ModeDefault {
-		info, err := os.Lstat(configPath)
-		if err != nil {
-			if !os.IsNotExist(err) {
-				panic(err)
-			}
-			debug("Config %s not exist, using the default config: %s", configPath, defaultConfigPath)
-			initialModel.current = defaultConfigPath
+		debug("Config %s not exist, using the default config: %s", configPath, defaultConfigPath)
+		initialModel.current = defaultConfigPath
+	} else {
+		if info.Mode()&os.ModeSymlink == 0 {
+			// is not a symlink
+			debug("Config %s is not a symlink", configPath)
+			initialModel.current = configPath
 		} else {
-			if info.Mode()&os.ModeSymlink == 0 {
-				// is not a symlink
-				debug("Config %s is not a symlink", configPath)
-				initialModel.current = configPath
-			} else {
-				// is a symlink
-				target, err := os.Readlink(configPath)
-				magicconch.Must(err)
-				debug("Config %s is a symlink to: %s", configPath, target)
-				initialModel.current = target
-			}
+			// is a symlink
+			target, err := os.Readlink(configPath)
+			magicconch.Must(err)
+			debug("Config %s is a symlink to: %s", configPath, target)
+			initialModel.current = target
 		}
-		debug("Current config: %s", initialModel.current)
 	}
+	debug("Current config: %s", initialModel.current)
 }
 
 func (m model) Init() tea.Cmd {
@@ -121,42 +100,20 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.cursor++
 			}
 
-		// The spacebar (a literal space) toggle the selected state for the item that the cursor is pointing at.
-		case " ":
-			if mode == ModeEnv {
-				choice := m.choices[m.cursor]
-				fullPath := choice.FullPath
-				if _, ok := m.selected[fullPath]; ok {
-					delete(m.selected, fullPath)
-				} else {
-					m.selected[fullPath] = struct{}{}
-				}
-			}
-
 		case "enter":
-			if mode == ModeEnv {
-				var ss []string
-				for s := range m.selected {
-					ss = append(ss, s)
-				}
-				kubeconfig := strings.Join(ss, ":")
-				fmt.Printf("\nexport KUBECONFIG=%s\n", kubeconfig)
-				return m, tea.Quit
-			} else {
-				err := Symlink(m.choices[m.cursor].FullPath, configPath)
-				if err != nil {
-					log.Fatal(errors.Wrap(err, "Symlink error"))
-				}
-				fmt.Printf("\n%s is now symlink to %s\n",
-					termenv.String(configPath).Foreground(ColorProfile.Color("32")),
-					termenv.String(m.choices[m.cursor].FullPath).Foreground(ColorProfile.Color("32")))
-				if os.Getenv("KUBECONFIG") != configPath {
-					s := termenv.String(fmt.Sprintf("\nWARNING: You should set KUBECONFIG=%s to make it work.\n", configPath))
-					s = s.Foreground(ColorProfile.Color("1"))
-					fmt.Println(s)
-				}
-				return m, tea.Quit
+			err := Symlink(m.choices[m.cursor].FullPath, configPath)
+			if err != nil {
+				log.Fatal(errors.Wrap(err, "Symlink error"))
 			}
+			fmt.Printf("\n%s is now symlink to %s\n",
+				termenv.String(configPath).Foreground(ColorProfile.Color("32")),
+				termenv.String(m.choices[m.cursor].FullPath).Foreground(ColorProfile.Color("32")))
+			if os.Getenv("KUBECONFIG") != configPath {
+				s := termenv.String(fmt.Sprintf("\nWARNING: You should set KUBECONFIG=%s to make it work.\n", configPath))
+				s = s.Foreground(ColorProfile.Color("1"))
+				fmt.Println(s)
+			}
+			return m, tea.Quit
 		}
 	}
 
@@ -174,25 +131,22 @@ func (m model) View() string {
 		// Is the cursor pointing at this choice?
 		cursor := " " // no cursor
 		if m.cursor == key {
-			cursor = ">" // cursor!
+			ts := termenv.String(">") // cursor!
+			ts.Blink()
+			cursor = ts.String()
 		}
 
-		prefix := ""
-		if mode == ModeEnv {
-			if _, ok := m.selected[candidate.FullPath]; ok {
-				prefix = "[x] " // selected!
-			} else {
-				prefix = "[ ] " // not selected
-			}
-		} else {
-			if candidate.FullPath == m.current {
-				prefix = "* "
-			} else {
-				prefix = "  "
-			}
+		prefix := " "
+		if candidate.FullPath == m.current {
+			prefix = "*"
 		}
 
-		s += fmt.Sprintf("%s %s%s\t%s\n", cursor, prefix, candidate.Name, candidate.FullPath)
+		s += cursor
+		es := termenv.String(fmt.Sprintf(" %s%s (%s)\n", prefix, candidate.Name, candidate.FullPath))
+		if candidate.FullPath == m.current {
+			es = es.Foreground(ColorProfile.Color("28"))
+		}
+		s += es.String()
 	}
 
 	// The footer
