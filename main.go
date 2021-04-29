@@ -4,11 +4,10 @@ import (
 	"fmt"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/muesli/termenv"
-	"github.com/pkg/errors"
 	"github.com/spongeprojects/magicconch"
-	"log"
 	"os"
 	"path"
+	"strings"
 )
 
 type model struct {
@@ -17,10 +16,13 @@ type model struct {
 
 	candidates []Candidate
 
-	// cursor indicates which choice our cursor is pointing at
+	// cursor indicates which candidate our cursor is pointing at
 	cursor int
 
-	confirmed bool
+	quitting bool
+
+	// farewell is the message which will be printed before quitting
+	farewell string
 
 	// currentConfigPath is the full path of current kubeconfig
 	currentConfigPath string
@@ -47,6 +49,21 @@ func ensureCFDirExists() {
 	}
 }
 
+func symlinkConfigPathTo(path string) string {
+	err := Symlink(path, configPath)
+	if err != nil {
+		return termenv.String(fmt.Sprintf("Symlink error: %s", err)).Foreground(Warning).String()
+	}
+	s := fmt.Sprintf("\n%s is now symlink to %s\n",
+		termenv.String(configPath).Foreground(Info),
+		termenv.String(path).Foreground(Info))
+	if os.Getenv("KUBECONFIG") != configPath {
+		s += termenv.String(fmt.Sprintf("\nWARNING: You should set KUBECONFIG=%s to make it work.\n",
+			configPath)).Foreground(Warning).String()
+	}
+	return s
+}
+
 func (m *model) Init() tea.Cmd {
 	// Just return `nil`, which means "no I/O right now, please."
 	ensureCFDirExists()
@@ -54,6 +71,31 @@ func (m *model) Init() tea.Cmd {
 	candidates, err := ListKubeconfigCandidatesInDir(kubeDir)
 	magicconch.Must(err)
 	initialModel.candidates = candidates
+
+	if len(os.Args) > 1 && os.Args[1] != "" {
+		var guess []Candidate
+		for _, candidate := range candidates {
+			if strings.HasPrefix(candidate.Name, os.Args[1]) {
+				guess = append(guess, candidate)
+			}
+		}
+		m.quitting = true
+		if guess == nil {
+			fmt.Println(termenv.String("No match found:", os.Args[1]).Foreground(Warning))
+		} else if len(guess) == 1 {
+			fmt.Println(symlinkConfigPathTo(guess[0].FullPath))
+		} else {
+			var s []string
+			for _, g := range guess {
+				s = append(s, g.Name)
+			}
+			fmt.Println(termenv.String(fmt.Sprintf("More than 1 matches found: %s, could not determine: %s",
+				os.Args[1], strings.Join(s, ", "))).Foreground(Warning))
+		}
+		// when tea.Quit is returned in Init, view cannot be rendered properly,
+		// so we need to print the farewell message ourselves
+		return tea.Quit
+	}
 
 	info, err := os.Lstat(configPath)
 	if err != nil {
@@ -108,7 +150,8 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 
 		case "enter":
-			m.confirmed = true
+			m.quitting = true
+			m.farewell = symlinkConfigPathTo(m.candidates[m.cursor].FullPath)
 			return m, tea.Quit
 		}
 	}
@@ -118,23 +161,12 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m *model) View() string {
-	s := ""
-	if m.confirmed {
-		err := Symlink(m.candidates[m.cursor].FullPath, configPath)
-		if err != nil {
-			log.Fatal(errors.Wrap(err, "Symlink error"))
-		}
-		s += fmt.Sprintf("\n%s is now symlink to %s\n",
-			termenv.String(configPath).Foreground(Info),
-			termenv.String(m.candidates[m.cursor].FullPath).Foreground(Info))
-		if os.Getenv("KUBECONFIG") != configPath {
-			ts := termenv.String(fmt.Sprintf("\nWARNING: You should set KUBECONFIG=%s to make it work.\n", configPath))
-			ts = ts.Foreground(Warning)
-			s += ts.String()
-		}
-		return s
+	if m.quitting {
+		return m.farewell
 	}
+
 	// The header
+	s := ""
 	for _, meta := range m.meta {
 		s += meta + "\n"
 	}
