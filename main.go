@@ -12,10 +12,15 @@ import (
 )
 
 type model struct {
+	// meta is extra information displayed on top of the window
+	meta []string
+
 	candidates []Candidate
 
 	// cursor indicates which choice our cursor is pointing at
 	cursor int
+
+	confirmed bool
 
 	// currentConfigPath is the full path of current kubeconfig
 	currentConfigPath string
@@ -103,18 +108,7 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 
 		case "enter":
-			err := Symlink(m.candidates[m.cursor].FullPath, configPath)
-			if err != nil {
-				log.Fatal(errors.Wrap(err, "Symlink error"))
-			}
-			fmt.Printf("\n%s is now symlink to %s\n",
-				termenv.String(configPath).Foreground(ColorProfile.Color("32")),
-				termenv.String(m.candidates[m.cursor].FullPath).Foreground(ColorProfile.Color("32")))
-			if os.Getenv("KUBECONFIG") != configPath {
-				s := termenv.String(fmt.Sprintf("\nWARNING: You should set KUBECONFIG=%s to make it work.\n", configPath))
-				s = s.Foreground(ColorProfile.Color("1"))
-				fmt.Println(s)
-			}
+			m.confirmed = true
 			return m, tea.Quit
 		}
 	}
@@ -124,8 +118,27 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m *model) View() string {
+	s := ""
+	if m.confirmed {
+		err := Symlink(m.candidates[m.cursor].FullPath, configPath)
+		if err != nil {
+			log.Fatal(errors.Wrap(err, "Symlink error"))
+		}
+		s += fmt.Sprintf("\n%s is now symlink to %s\n",
+			termenv.String(configPath).Foreground(Info),
+			termenv.String(m.candidates[m.cursor].FullPath).Foreground(Info))
+		if os.Getenv("KUBECONFIG") != configPath {
+			ts := termenv.String(fmt.Sprintf("\nWARNING: You should set KUBECONFIG=%s to make it work.\n", configPath))
+			ts = ts.Foreground(Warning)
+			s += ts.String()
+		}
+		return s
+	}
 	// The header
-	s := "What kubeconfig you want to use?\n\n"
+	for _, meta := range m.meta {
+		s += meta + "\n"
+	}
+	s += "What kubeconfig you want to use?\n\n"
 
 	// Iterate over our candidates
 	for key, candidate := range m.candidates {
@@ -143,11 +156,12 @@ func (m *model) View() string {
 		if candidate.FullPath == m.currentConfigPath {
 			suffix = "*"
 		}
-		es := termenv.String(fmt.Sprintf(" %s%s (%s)\n", candidate.Name, suffix, candidate.FullPath))
+		ts := termenv.String(fmt.Sprintf(" %s%s (%s)\n", candidate.Name, suffix, candidate.FullPath))
 		if candidate.FullPath == m.currentConfigPath {
-			es = es.Foreground(ColorProfile.Color("28"))
+			ts = ts.Foreground(Info)
 		}
-		s += es.String()
+
+		s += ts.String()
 	}
 
 	// The footer

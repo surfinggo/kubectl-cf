@@ -12,6 +12,7 @@ var (
 
 func debug(format string, a ...interface{}) {
 	if _debug {
-		fmt.Print(termenv.String(fmt.Sprintf("[DEBUG] "+format+"\n", a...)).Faint())
+		initialModel.meta = append(initialModel.meta,
+			termenv.String(fmt.Sprintf("[DEBUG] "+format, a...)).Faint().String())
 	}
 }
