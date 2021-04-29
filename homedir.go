@@ -6,7 +6,7 @@ import (
 	"runtime"
 )
 
-// HomeDir returns the home directory for the currentConfigPath user.
+// HomeDir returns the home directory for the current user.
 // On Windows:
 // 1. the first of %HOME%, %HOMEDRIVE%%HOMEPATH%, %USERPROFILE% containing a `.kube\config` file is returned.
 // 2. if none of those locations contain a `.kube\config` file, the first of %HOME%, %USERPROFILE%, %HOMEDRIVE%%HOMEPATH% that exists and is writeable is returned.
