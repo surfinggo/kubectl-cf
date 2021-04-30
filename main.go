@@ -173,9 +173,13 @@ func (m *model) View() string {
 	s += "What kubeconfig you want to use?\n\n"
 
 	// Iterate over our candidates
+	longestName := 0
+	for _, candidate := range m.candidates {
+		if len(candidate.Name) > longestName {
+			longestName = len(candidate.Name)
+		}
+	}
 	for key, candidate := range m.candidates {
-
-		// Is the cursor pointing at this choice?
 		cursor := " " // no cursor
 		if m.cursor == key {
 			ts := termenv.String(">") // cursor!
@@ -188,7 +192,8 @@ func (m *model) View() string {
 		if candidate.FullPath == m.currentConfigPath {
 			suffix = "*"
 		}
-		ts := termenv.String(fmt.Sprintf(" %s%s (%s)\n", candidate.Name, suffix, candidate.FullPath))
+		tmpl := fmt.Sprintf(" %%-%ds %%s%%s\n", longestName)
+		ts := termenv.String(fmt.Sprintf(tmpl, candidate.Name, candidate.FullPath, suffix))
 		if candidate.FullPath == m.currentConfigPath {
 			ts = ts.Foreground(Info)
 		}
