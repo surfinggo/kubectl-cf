@@ -3,7 +3,6 @@ package main
 import (
 	"fmt"
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/muesli/termenv"
 	"github.com/spongeprojects/magicconch"
 	"os"
 	"path"
@@ -52,14 +51,12 @@ func ensureCFDirExists() {
 func symlinkConfigPathTo(path string) string {
 	err := Symlink(path, configPath)
 	if err != nil {
-		return termenv.String(fmt.Sprintf("Symlink error: %s", err)).Foreground(Warning).String()
+		return Warning(fmt.Sprintf("Symlink error: %s", err))
 	}
 	s := fmt.Sprintf("\n%s is now symlink to %s\n",
-		termenv.String(configPath).Foreground(Info),
-		termenv.String(path).Foreground(Info))
+		Info(configPath), Info(path))
 	if os.Getenv("KUBECONFIG") != configPath {
-		s += termenv.String(fmt.Sprintf("\nWARNING: You should set KUBECONFIG=%s to make it work.\n",
-			configPath)).Foreground(Warning).String()
+		s += Warning(fmt.Sprintf("\nWARNING: You should set KUBECONFIG=%s to make it work.\n", configPath))
 	}
 	return s
 }
@@ -81,16 +78,16 @@ func (m *model) Init() tea.Cmd {
 		}
 		m.quitting = true
 		if guess == nil {
-			fmt.Println(termenv.String("No match found:", os.Args[1]).Foreground(Warning))
+			m.farewell = Warning(fmt.Sprintf("No match found: %s\n", os.Args[1]))
 		} else if len(guess) == 1 {
-			fmt.Println(symlinkConfigPathTo(guess[0].FullPath))
+			m.farewell = symlinkConfigPathTo(guess[0].FullPath)
 		} else {
 			var s []string
 			for _, g := range guess {
 				s = append(s, g.Name)
 			}
-			fmt.Println(termenv.String(fmt.Sprintf("More than 1 matches found: %s, could not determine: %s",
-				os.Args[1], strings.Join(s, ", "))).Foreground(Warning))
+			m.farewell = Warning(fmt.Sprintf("More than 1 matches found: %s, can not determine: %s\n",
+				os.Args[1], strings.Join(s, ", ")))
 		}
 		// when tea.Quit is returned in Init, view cannot be rendered properly,
 		// so we need to print the farewell message ourselves
@@ -182,9 +179,7 @@ func (m *model) View() string {
 	for key, candidate := range m.candidates {
 		cursor := " " // no cursor
 		if m.cursor == key {
-			ts := termenv.String(">") // cursor!
-			ts.Blink()
-			cursor = ts.String()
+			cursor = ">"
 		}
 		s += cursor
 
@@ -193,17 +188,15 @@ func (m *model) View() string {
 			suffix = "*"
 		}
 		tmpl := fmt.Sprintf(" %%-%ds %%s%%s\n", longestName)
-		ts := termenv.String(fmt.Sprintf(tmpl, candidate.Name, candidate.FullPath, suffix))
+		ts := fmt.Sprintf(tmpl, candidate.Name, candidate.FullPath, suffix)
 		if candidate.FullPath == m.currentConfigPath {
-			ts = ts.Foreground(Info)
+			ts = Info(ts)
 		}
-
-		s += ts.String()
+		s += ts
 	}
 
 	// The footer
-	s += "\nPress enter to confirm, press q to quit.\n"
-
+	s += Subtle("\nj/k, up/down: select • enter: choose • q, esc: quit\n")
 	return s
 }
 
