@@ -115,6 +115,13 @@ func (m *model) Init() tea.Cmd {
 		}
 	}
 	debug("Current config: %s", initialModel.currentConfigPath)
+
+	for key, candidate := range candidates {
+		if candidate.FullPath == m.currentConfigPath {
+			m.cursor = key
+		}
+	}
+
 	return nil
 }
 
