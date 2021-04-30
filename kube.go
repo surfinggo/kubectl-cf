@@ -24,7 +24,7 @@ func ListKubeconfigCandidatesInDir(dir string) ([]Candidate, error) {
 
 	var files []Candidate
 	for _, file := range fileInfo {
-		if file.IsDir() {
+		if file.IsDir() || IsSymlink(file) {
 			continue
 		}
 

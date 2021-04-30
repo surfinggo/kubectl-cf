@@ -6,6 +6,10 @@ import (
 	"os"
 )
 
+func IsSymlink(stat os.FileInfo) bool {
+	return stat.Mode()&os.ModeSymlink != 0
+}
+
 // Symlink creates newname as a symbolic link to oldname,
 // if newname not exist or is a symlink, it will be replaced directly,
 // in other cases, it will be backed up first
@@ -18,15 +22,15 @@ func Symlink(oldname, newname string) error {
 		return errors.Wrap(err, "os.Lstat error")
 	}
 
-	if stat.Mode()&os.ModeSymlink == 0 {
-		// is not a symlink
-		if err := BackUp(newname); err != nil {
-			return errors.Wrap(err, "back up error")
-		}
-	} else {
+	if IsSymlink(stat) {
 		// is a symlink
 		if err := os.Remove(newname); err != nil {
 			return errors.Wrap(err, "remove old symlink error")
+		}
+	} else {
+		// is not a symlink
+		if err := BackUp(newname); err != nil {
+			return errors.Wrap(err, "back up error")
 		}
 	}
 	return errors.Wrap(os.Symlink(oldname, newname), "create symlink error")

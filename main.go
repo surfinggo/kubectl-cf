@@ -35,7 +35,7 @@ var (
 	kubeDir           = path.Join(homeDir, ".kube")
 	defaultConfigPath = path.Join(kubeDir, "config")
 	cfDir             = path.Join(kubeDir, "kubectl-cf")
-	configPath        = path.Join(cfDir, "config")
+	configPath        = path.Join(kubeDir, "config")
 )
 
 func ensureCFDirExists() {
@@ -56,7 +56,8 @@ func symlinkConfigPathTo(path string) string {
 	}
 	s := fmt.Sprintf("\n%s is now symlink to %s\n",
 		Info(configPath), Info(path))
-	if os.Getenv("KUBECONFIG") != configPath {
+	kubeconfigEnv := os.Getenv("KUBECONFIG")
+	if !(kubeconfigEnv == configPath || (configPath == defaultConfigPath && kubeconfigEnv == "")) {
 		s += Warning(fmt.Sprintf("\nWARNING: You should set KUBECONFIG=%s to make it work.\n", configPath))
 	}
 	return s
@@ -122,16 +123,16 @@ func (m *model) Init() tea.Cmd {
 		debug("Config %s not exist, using the default config: %s", configPath, defaultConfigPath)
 		initialModel.currentConfigPath = defaultConfigPath
 	} else {
-		if info.Mode()&os.ModeSymlink == 0 {
-			// is not a symlink
-			debug("Config %s is not a symlink", configPath)
-			initialModel.currentConfigPath = configPath
-		} else {
+		if IsSymlink(info) {
 			// is a symlink
 			target, err := os.Readlink(configPath)
 			magicconch.Must(err)
 			debug("Config %s is a symlink to: %s", configPath, target)
 			initialModel.currentConfigPath = target
+		} else {
+			// is not a symlink
+			debug("Config %s is not a symlink", configPath)
+			initialModel.currentConfigPath = configPath
 		}
 	}
 	debug("Current config: %s", initialModel.currentConfigPath)
