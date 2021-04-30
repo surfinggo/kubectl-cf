@@ -87,9 +87,7 @@ func (m *model) Init() tea.Cmd {
 	magicconch.Must(err)
 	initialModel.candidates = candidates
 
-	if len(flag.Args()) > 0 {
-		search := flag.Args()[0]
-
+	if search := flag.Arg(0); search != "" {
 		var guess []Candidate
 		for _, candidate := range candidates {
 			if candidate.Name == search {
