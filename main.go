@@ -1,6 +1,7 @@
 package main
 
 import (
+	"flag"
 	"fmt"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/spongeprojects/magicconch"
@@ -62,26 +63,45 @@ func symlinkConfigPathTo(path string) string {
 }
 
 func (m *model) Init() tea.Cmd {
-	// Just return `nil`, which means "no I/O right now, please."
 	ensureCFDirExists()
+
+	flag.Usage = func() {
+		_, _ = fmt.Fprintf(flag.CommandLine.Output(), `Usage of kubectl-cf:
+
+  cf           Select kubeconfig interactively
+  cf [config]  Select kubeconfig directly
+
+`)
+		flag.PrintDefaults()
+	}
+
+	flag.Parse()
+
+	if len(flag.Args()) > 1 {
+		m.quitting = true
+		m.farewell = "Wrong number of arguments, expect 1\n"
+		return tea.Quit
+	}
 
 	candidates, err := ListKubeconfigCandidatesInDir(kubeDir)
 	magicconch.Must(err)
 	initialModel.candidates = candidates
 
-	if len(os.Args) > 1 && os.Args[1] != "" {
+	if len(flag.Args()) > 0 {
+		search := flag.Args()[0]
+
 		var guess []Candidate
 		for _, candidate := range candidates {
-			if candidate.Name == os.Args[1] {
+			if candidate.Name == search {
 				guess = []Candidate{candidate}
 				break
 			}
-			if strings.HasPrefix(candidate.Name, os.Args[1]) {
+			if strings.HasPrefix(candidate.Name, search) {
 				guess = append(guess, candidate)
 			}
 		}
 		if guess == nil {
-			m.farewell = Warning(fmt.Sprintf("No match found: %s\n", os.Args[1]))
+			m.farewell = Warning(fmt.Sprintf("\nNo match found: %s\n", search))
 		} else if len(guess) == 1 {
 			m.farewell = symlinkConfigPathTo(guess[0].FullPath)
 		} else {
@@ -89,8 +109,8 @@ func (m *model) Init() tea.Cmd {
 			for _, g := range guess {
 				s = append(s, g.Name)
 			}
-			m.farewell = Warning(fmt.Sprintf("More than 1 matches found: %s, can not determine: %s\n",
-				os.Args[1], strings.Join(s, ", ")))
+			m.farewell = Warning(fmt.Sprintf("\nMore than 1 matches found: %s, can not determine: %s\n",
+				search, strings.Join(s, ", ")))
 		}
 		m.quitting = true
 		return tea.Quit
