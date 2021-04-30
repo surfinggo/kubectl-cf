@@ -72,11 +72,14 @@ func (m *model) Init() tea.Cmd {
 	if len(os.Args) > 1 && os.Args[1] != "" {
 		var guess []Candidate
 		for _, candidate := range candidates {
+			if candidate.Name == os.Args[1] {
+				guess = []Candidate{candidate}
+				break
+			}
 			if strings.HasPrefix(candidate.Name, os.Args[1]) {
 				guess = append(guess, candidate)
 			}
 		}
-		m.quitting = true
 		if guess == nil {
 			m.farewell = Warning(fmt.Sprintf("No match found: %s\n", os.Args[1]))
 		} else if len(guess) == 1 {
@@ -89,8 +92,7 @@ func (m *model) Init() tea.Cmd {
 			m.farewell = Warning(fmt.Sprintf("More than 1 matches found: %s, can not determine: %s\n",
 				os.Args[1], strings.Join(s, ", ")))
 		}
-		// when tea.Quit is returned in Init, view cannot be rendered properly,
-		// so we need to print the farewell message ourselves
+		m.quitting = true
 		return tea.Quit
 	}
 
