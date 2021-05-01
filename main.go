@@ -90,13 +90,11 @@ func (m *model) Init() tea.Cmd {
 		initialModel.currentConfigPath = defaultConfigPath
 	} else {
 		if IsSymlink(info) {
-			// is a symlink
 			target, err := os.Readlink(configPath)
 			magicconch.Must(err)
 			addDebugMessage("The symlink points to: %s", target)
 			initialModel.currentConfigPath = target
 		} else {
-			// is not a symlink
 			addDebugMessage("The symlink is not a symlink")
 			initialModel.currentConfigPath = configPath
 		}
@@ -106,11 +104,10 @@ func (m *model) Init() tea.Cmd {
 	if debug {
 		f, err := os.Open(path.Join(cfDir, PreviousKubeconfigFullPath))
 		if err != nil {
-			if os.IsNotExist(err) {
-				addDebugMessage("No previous kubeconfig")
-			} else {
+			if !os.IsNotExist(err) {
 				panic(err)
 			}
+			addDebugMessage("No previous kubeconfig")
 		} else {
 			b, err := ioutil.ReadAll(f)
 			magicconch.Must(err)
@@ -122,10 +119,10 @@ func (m *model) Init() tea.Cmd {
 		if search == "-" {
 			f, err := os.Open(path.Join(cfDir, PreviousKubeconfigFullPath))
 			if err != nil {
-				if os.IsNotExist(err) {
-					return m.quit(Warning("No previous kubeconfig"))
+				if !os.IsNotExist(err) {
+					panic(err)
 				}
-				panic(err)
+				return m.quit(Warning("No previous kubeconfig"))
 			}
 			b, err := ioutil.ReadAll(f)
 			magicconch.Must(err)
@@ -159,6 +156,7 @@ func (m *model) Init() tea.Cmd {
 			search, strings.Join(s, ", "))))
 	}
 
+	// focus on current config path
 	for key, candidate := range candidates {
 		if candidate.FullPath == m.currentConfigPath {
 			m.cursor = key
@@ -170,7 +168,6 @@ func (m *model) Init() tea.Cmd {
 
 func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
-
 	// Is it a key press?
 	case tea.KeyMsg:
 		// The key pressed
@@ -207,13 +204,10 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 func (m *model) View() string {
 	// The header
-	s := ""
-	for _, meta := range m.meta {
-		s += meta + "\n"
-	}
+	s := strings.Join(m.meta, "\n") + "\n"
+
 	if m.quitting {
-		s += m.farewell
-		return s
+		return s + m.farewell
 	}
 
 	s += "What kubeconfig you want to use?\n\n"
@@ -226,7 +220,7 @@ func (m *model) View() string {
 		}
 	}
 	for key, candidate := range m.candidates {
-		cursor := " " // no cursor
+		cursor := " "
 		if m.cursor == key {
 			cursor = ">"
 		}
