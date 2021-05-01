@@ -38,7 +38,7 @@ var (
 	configPath        = path.Join(kubeDir, "config")
 )
 
-func ensureCFDirExists() {
+func (m *model) ensureCFDirExists() {
 	if _, err := os.Lstat(cfDir); err != nil {
 		if os.IsNotExist(err) {
 			debug("Default config dir %s not exist, creating", cfDir)
@@ -47,6 +47,29 @@ func ensureCFDirExists() {
 			magicconch.Must(err)
 		}
 	}
+}
+
+func (m *model) parseFlags() {
+	flag.Usage = func() {
+		_, _ = fmt.Fprintf(flag.CommandLine.Output(), `Usage of kubectl-cf:
+
+  cf           Select kubeconfig interactively
+  cf [config]  Select kubeconfig directly
+
+`)
+		flag.PrintDefaults()
+	}
+
+	flag.Parse()
+}
+
+func (m *model) quit(farewell string) tea.Cmd {
+	if !strings.HasSuffix(farewell, "\n") {
+		farewell += "\n" // there must be a "\n" at the end of message
+	}
+	m.quitting = true
+	m.farewell = farewell
+	return tea.Quit
 }
 
 func symlinkConfigPathTo(path string) string {
@@ -64,24 +87,12 @@ func symlinkConfigPathTo(path string) string {
 }
 
 func (m *model) Init() tea.Cmd {
-	ensureCFDirExists()
+	m.ensureCFDirExists()
 
-	flag.Usage = func() {
-		_, _ = fmt.Fprintf(flag.CommandLine.Output(), `Usage of kubectl-cf:
-
-  cf           Select kubeconfig interactively
-  cf [config]  Select kubeconfig directly
-
-`)
-		flag.PrintDefaults()
-	}
-
-	flag.Parse()
+	m.parseFlags()
 
 	if len(flag.Args()) > 1 {
-		m.quitting = true
-		m.farewell = "Wrong number of arguments, expect 1\n"
-		return tea.Quit
+		return m.quit("Wrong number of arguments, expect 1")
 	}
 
 	candidates, err := ListKubeconfigCandidatesInDir(kubeDir)
@@ -100,19 +111,19 @@ func (m *model) Init() tea.Cmd {
 			}
 		}
 		if guess == nil {
-			m.farewell = Warning(fmt.Sprintf("\nNo match found: %s\n", search))
-		} else if len(guess) == 1 {
-			m.farewell = symlinkConfigPathTo(guess[0].FullPath)
-		} else {
-			var s []string
-			for _, g := range guess {
-				s = append(s, g.Name)
-			}
-			m.farewell = Warning(fmt.Sprintf("\nMore than 1 matches found: %s, can not determine: %s\n",
-				search, strings.Join(s, ", ")))
+			return m.quit(Warning(fmt.Sprintf("\nNo match found: %s", search)))
 		}
-		m.quitting = true
-		return tea.Quit
+
+		if len(guess) == 1 {
+			return m.quit(symlinkConfigPathTo(guess[0].FullPath))
+		}
+
+		var s []string
+		for _, g := range guess {
+			s = append(s, g.Name)
+		}
+		return m.quit(Warning(fmt.Sprintf("\nMore than 1 matches found: %s, can not determine: %s",
+			search, strings.Join(s, ", "))))
 	}
 
 	info, err := os.Lstat(configPath)
@@ -175,9 +186,7 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 
 		case "enter":
-			m.quitting = true
-			m.farewell = symlinkConfigPathTo(m.candidates[m.cursor].FullPath)
-			return m, tea.Quit
+			return m, m.quit(symlinkConfigPathTo(m.candidates[m.cursor].FullPath))
 		}
 	}
 
@@ -230,8 +239,5 @@ func (m *model) View() string {
 
 func main() {
 	p := tea.NewProgram(initialModel)
-	if err := p.Start(); err != nil {
-		fmt.Printf("Alas, there's been an error: %v", err)
-		os.Exit(1)
-	}
+	magicconch.Must(p.Start())
 }
