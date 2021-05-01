@@ -29,8 +29,14 @@ prefix `kubectl-`.
 
 You can also rename it to any name you want, or create a symlink to it, with a shorter name, like `cf`.
 
+## Translations
+
+- [English](https://github.com/spongeprojects/kubectl-cf)
+- [Chinese](https://github.com/wbsnail/kubectl-cf)
+
 ## TODO (PR are welcomed)
 
 - Auto completion;
 - [krew](https://krew.sigs.k8s.io/) integration;
 - Tests;
+
