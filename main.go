@@ -59,20 +59,19 @@ func (m *model) symlinkConfigPathTo(name string) string {
 
 	err := Symlink(name, configPath)
 	if err != nil {
-		return Warning(fmt.Sprintf("Symlink error: %s", err))
+		return Warning(t("createSymlinkError", err))
 	}
-	s := fmt.Sprintf("\n%s is now symlink to %s\n",
-		Info(configPath), Info(name))
+	s := t("symlinkNowPointTo", Info(configPath), Info(name))
 	kubeconfigEnv := os.Getenv("KUBECONFIG")
 	if !(kubeconfigEnv == configPath || (configPath == defaultConfigPath && kubeconfigEnv == "")) {
-		s += Warning(fmt.Sprintf("\nWARNING: You should set KUBECONFIG=%s to make it work.\n", configPath))
+		s += "\n" + Warning(t("kubeconfigEnvWarning", configPath))
 	}
 	return s
 }
 
 func (m *model) Init() tea.Cmd {
 	if len(flag.Args()) > 1 {
-		return m.quit("Wrong number of arguments, expect 1")
+		return m.quit(t("wrongNumberOfArgumentExpect1"))
 	}
 
 	candidates, err := ListKubeconfigCandidatesInDir(kubeDir)
@@ -96,8 +95,7 @@ func (m *model) Init() tea.Cmd {
 			initialModel.currentConfigPath = target
 		} else {
 			addDebugMessage("The symlink is not a symlink")
-			return m.quit(Warning(fmt.Sprintf("I'm sorry but %s must be a symlink to use kubectl-cf, "+
-				"please move it to other place like ~/.kube/default.kubeconfig", configPath)))
+			return m.quit(Warning(t("kubeconfigNotSymlink", configPath)))
 		}
 	}
 	addDebugMessage("Current using kubeconfig: %s", initialModel.currentConfigPath)
@@ -123,7 +121,7 @@ func (m *model) Init() tea.Cmd {
 				if !os.IsNotExist(err) {
 					panic(err)
 				}
-				return m.quit(Warning("No previous kubeconfig"))
+				return m.quit(Warning(t("noPreviousKubeconfig")))
 			}
 			b, err := ioutil.ReadAll(f)
 			magicconch.Must(err)
@@ -142,7 +140,7 @@ func (m *model) Init() tea.Cmd {
 		}
 
 		if guess == nil {
-			return m.quit(Warning(fmt.Sprintf("No match found: %s", search)))
+			return m.quit(Warning(t("noMatchFound", search)))
 		}
 
 		if len(guess) == 1 {
@@ -153,8 +151,7 @@ func (m *model) Init() tea.Cmd {
 		for _, g := range guess {
 			s = append(s, g.Name)
 		}
-		return m.quit(Warning(fmt.Sprintf("More than 1 matches found: %s, can not determine: %s",
-			search, strings.Join(s, ", "))))
+		return m.quit(Warning(t("moreThanOneMatchesFound", search, strings.Join(s, ", "))))
 	}
 
 	// focus on current config path
@@ -211,7 +208,7 @@ func (m *model) View() string {
 		return s + m.farewell
 	}
 
-	s += "What kubeconfig you want to use?\n\n"
+	s += t("whatKubeconfig") + "\n\n"
 
 	// Iterate over our candidates
 	longestName := 0
@@ -240,22 +237,15 @@ func (m *model) View() string {
 	}
 
 	// The footer
-	s += Subtle("\nj/k, up/down: select • enter: choose • q, esc: quit\n")
+	s += Subtle("\n" + t("helpActions") + "\n")
 	return s
 }
 
 func init() {
 	flag.Usage = func() {
-		_, _ = fmt.Fprintf(flag.CommandLine.Output(), `Usage of kubectl-cf:
-
-  cf           Select kubeconfig interactively
-  cf [config]  Select kubeconfig directly
-  cf -         Switch to the previous kubeconfig
-`)
+		_, _ = fmt.Fprintf(flag.CommandLine.Output(), t("cfUsage"))
 		flag.PrintDefaults()
 	}
-
-	flag.Parse()
 
 	// ensure config dir exists
 	if _, err := os.Lstat(cfDir); err != nil {
@@ -269,6 +259,8 @@ func init() {
 }
 
 func main() {
+	flag.Parse()
+
 	p := tea.NewProgram(initialModel)
 	magicconch.Must(p.Start())
 }
