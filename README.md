@@ -1,6 +1,6 @@
 # kubectl-cf
 
-Faster way to switch between kubeconfigs (not contexts).
+Faster way to switch between kubeconfig files (not contexts).
 
 ![demo.gif](https://github.com/spongeprojects/kubectl-cf/blob/main/assets/demo.gif?raw=true)
 
@@ -12,12 +12,12 @@ Usage of kubectl-cf:
   cf -         Switch to the previous kubeconfig
 ```
 
-This tool is designed to switch between kubeconfigs, if you want to switch between context within a single kubeconfig (
-or multiple kubeconfigs), you should use https://github.com/ahmetb/kubectx instead.
+This tool is designed to switch between kubeconfig files, if you want to switch between contexts within a single
+kubeconfig (or multiple kubeconfig files), you should use https://github.com/ahmetb/kubectx instead.
 
-### Installation
+## Installation
 
-#### Install Manually
+### Install Manually
 
 First, download tar file from the release page: https://github.com/spongeprojects/kubectl-cf/releases.
 
@@ -29,7 +29,7 @@ prefix `kubectl-`.
 
 You can also rename it to any name you want, or create a symlink to it, with a shorter name, like `cf`.
 
-### TODO (PR are welcomed)
+## TODO (PR are welcomed)
 
 - Auto completion;
 - [krew](https://krew.sigs.k8s.io/) integration;
