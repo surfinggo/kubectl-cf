@@ -1,6 +1,6 @@
 # kubectl-cf
 
-Faster way to switch between kubeconfigs (not context).
+Faster way to switch between kubeconfigs (not contexts).
 
 ![demo.gif](https://github.com/spongeprojects/kubectl-cf/blob/main/assets/demo.gif?raw=true)
 
