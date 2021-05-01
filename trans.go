@@ -10,6 +10,9 @@ import (
 //go:embed trans.yaml
 var transYAML []byte
 
+//go:embed trans-fallback.yaml
+var transFallbackYAML []byte
+
 var trans map[string]string
 
 func t(messageID string, args ...interface{}) string {
@@ -17,5 +20,10 @@ func t(messageID string, args ...interface{}) string {
 }
 
 func init() {
-	magicconch.Must(yaml.Unmarshal(transYAML, &trans))
+	magicconch.Must(yaml.Unmarshal(transFallbackYAML, &trans))
+	var customized map[string]string
+	magicconch.Must(yaml.Unmarshal(transYAML, &customized))
+	for k, v := range customized {
+		trans[k] = v
+	}
 }

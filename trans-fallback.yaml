@@ -1,0 +1,15 @@
+cfUsage: |
+  Usage of kubectl-cf:
+    cf           Select kubeconfig interactively
+    cf [config]  Select kubeconfig directly
+    cf -         Switch to the previous kubeconfig
+createSymlinkError: "Create symlink error: %s"
+helpActions: "j/k, up/down: select • enter: choose • q, esc: quit"
+kubeconfigEnvWarning: "WARNING: You should set KUBECONFIG=%s to make it work."
+moreThanOneMatchesFound: "More than 1 matches found: %s, can not determine: %s"
+noMatchFound: "No match found: %s"
+noPreviousKubeconfig: "No previous kubeconfig"
+symlinkNowPointTo: "%s is now symlink to %s"
+kubeconfigNotSymlink: "I'm sorry but %s must be a symlink to use kubectl-cf, please move it to other place like ~/.kube/default.kubeconfig"
+whatKubeconfig: "What kubeconfig you want to use?"
+wrongNumberOfArgumentExpect1: "Wrong number of arguments, expect 1"
