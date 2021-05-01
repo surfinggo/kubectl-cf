@@ -6,11 +6,12 @@ import (
 )
 
 var (
-	_debug = os.Getenv("DEBUG") != ""
+	debug = os.Getenv("DEBUG") != ""
 )
 
-func debug(format string, a ...interface{}) {
-	if _debug {
+// addDebugMessage adds a debug message to meta, which will be displayed on top of the output
+func addDebugMessage(format string, a ...interface{}) {
+	if debug {
 		initialModel.meta = append(initialModel.meta, Subtle(fmt.Sprintf("[DEBUG] "+format, a...)))
 	}
 }

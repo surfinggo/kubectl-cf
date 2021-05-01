@@ -5,15 +5,22 @@ import (
 	"fmt"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/spongeprojects/magicconch"
+	"io/ioutil"
 	"os"
 	"path"
 	"strings"
 )
 
+const (
+	// PreviousKubeconfigFullPath is the file name which stores the previous kubeconfig file's full path
+	PreviousKubeconfigFullPath = "previous"
+)
+
 type model struct {
-	// meta is extra information displayed on top of the window
+	// meta is extra information displayed on top of the output
 	meta []string
 
+	// candidates is a list of (Candidate/kubeconfig)s
 	candidates []Candidate
 
 	// cursor indicates which candidate our cursor is pointing at
@@ -34,34 +41,9 @@ var (
 	homeDir           = HomeDir()
 	kubeDir           = path.Join(homeDir, ".kube")
 	defaultConfigPath = path.Join(kubeDir, "config")
+	configPath        = path.Join(kubeDir, "config") // same as defaultConfigPath for now, maybe allow user to specify
 	cfDir             = path.Join(kubeDir, "kubectl-cf")
-	configPath        = path.Join(kubeDir, "config")
 )
-
-func (m *model) ensureCFDirExists() {
-	if _, err := os.Lstat(cfDir); err != nil {
-		if os.IsNotExist(err) {
-			debug("Default config dir %s not exist, creating", cfDir)
-			magicconch.Must(os.Mkdir(cfDir, 0755))
-		} else {
-			magicconch.Must(err)
-		}
-	}
-}
-
-func (m *model) parseFlags() {
-	flag.Usage = func() {
-		_, _ = fmt.Fprintf(flag.CommandLine.Output(), `Usage of kubectl-cf:
-
-  cf           Select kubeconfig interactively
-  cf [config]  Select kubeconfig directly
-
-`)
-		flag.PrintDefaults()
-	}
-
-	flag.Parse()
-}
 
 func (m *model) quit(farewell string) tea.Cmd {
 	if !strings.HasSuffix(farewell, "\n") {
@@ -72,13 +54,15 @@ func (m *model) quit(farewell string) tea.Cmd {
 	return tea.Quit
 }
 
-func symlinkConfigPathTo(path string) string {
-	err := Symlink(path, configPath)
+func (m *model) symlinkConfigPathTo(name string) string {
+	magicconch.Must(os.WriteFile(path.Join(cfDir, PreviousKubeconfigFullPath), []byte(m.currentConfigPath), 0644))
+
+	err := Symlink(name, configPath)
 	if err != nil {
 		return Warning(fmt.Sprintf("Symlink error: %s", err))
 	}
 	s := fmt.Sprintf("\n%s is now symlink to %s\n",
-		Info(configPath), Info(path))
+		Info(configPath), Info(name))
 	kubeconfigEnv := os.Getenv("KUBECONFIG")
 	if !(kubeconfigEnv == configPath || (configPath == defaultConfigPath && kubeconfigEnv == "")) {
 		s += Warning(fmt.Sprintf("\nWARNING: You should set KUBECONFIG=%s to make it work.\n", configPath))
@@ -87,10 +71,6 @@ func symlinkConfigPathTo(path string) string {
 }
 
 func (m *model) Init() tea.Cmd {
-	m.ensureCFDirExists()
-
-	m.parseFlags()
-
 	if len(flag.Args()) > 1 {
 		return m.quit("Wrong number of arguments, expect 1")
 	}
@@ -99,7 +79,59 @@ func (m *model) Init() tea.Cmd {
 	magicconch.Must(err)
 	initialModel.candidates = candidates
 
+	addDebugMessage("Path to config symlink: %s", configPath)
+
+	info, err := os.Lstat(configPath)
+	if err != nil {
+		if !os.IsNotExist(err) {
+			panic(err)
+		}
+		addDebugMessage("The symlink not exist, using the default kubeconfig: %s", defaultConfigPath)
+		initialModel.currentConfigPath = defaultConfigPath
+	} else {
+		if IsSymlink(info) {
+			// is a symlink
+			target, err := os.Readlink(configPath)
+			magicconch.Must(err)
+			addDebugMessage("The symlink points to: %s", target)
+			initialModel.currentConfigPath = target
+		} else {
+			// is not a symlink
+			addDebugMessage("The symlink is not a symlink")
+			initialModel.currentConfigPath = configPath
+		}
+	}
+	addDebugMessage("Current using kubeconfig: %s", initialModel.currentConfigPath)
+
+	if debug {
+		f, err := os.Open(path.Join(cfDir, PreviousKubeconfigFullPath))
+		if err != nil {
+			if os.IsNotExist(err) {
+				addDebugMessage("No previous kubeconfig")
+			} else {
+				panic(err)
+			}
+		} else {
+			b, err := ioutil.ReadAll(f)
+			magicconch.Must(err)
+			addDebugMessage("Previous kubeconfig: %s", string(b))
+		}
+	}
+
 	if search := flag.Arg(0); search != "" {
+		if search == "-" {
+			f, err := os.Open(path.Join(cfDir, PreviousKubeconfigFullPath))
+			if err != nil {
+				if os.IsNotExist(err) {
+					return m.quit(Warning("No previous kubeconfig"))
+				}
+				panic(err)
+			}
+			b, err := ioutil.ReadAll(f)
+			magicconch.Must(err)
+			return m.quit(m.symlinkConfigPathTo(string(b)))
+		}
+
 		var guess []Candidate
 		for _, candidate := range candidates {
 			if candidate.Name == search {
@@ -110,43 +142,22 @@ func (m *model) Init() tea.Cmd {
 				guess = append(guess, candidate)
 			}
 		}
+
 		if guess == nil {
-			return m.quit(Warning(fmt.Sprintf("\nNo match found: %s", search)))
+			return m.quit(Warning(fmt.Sprintf("No match found: %s", search)))
 		}
 
 		if len(guess) == 1 {
-			return m.quit(symlinkConfigPathTo(guess[0].FullPath))
+			return m.quit(m.symlinkConfigPathTo(guess[0].FullPath))
 		}
 
 		var s []string
 		for _, g := range guess {
 			s = append(s, g.Name)
 		}
-		return m.quit(Warning(fmt.Sprintf("\nMore than 1 matches found: %s, can not determine: %s",
+		return m.quit(Warning(fmt.Sprintf("More than 1 matches found: %s, can not determine: %s",
 			search, strings.Join(s, ", "))))
 	}
-
-	info, err := os.Lstat(configPath)
-	if err != nil {
-		if !os.IsNotExist(err) {
-			panic(err)
-		}
-		debug("Config %s not exist, using the default config: %s", configPath, defaultConfigPath)
-		initialModel.currentConfigPath = defaultConfigPath
-	} else {
-		if IsSymlink(info) {
-			// is a symlink
-			target, err := os.Readlink(configPath)
-			magicconch.Must(err)
-			debug("Config %s is a symlink to: %s", configPath, target)
-			initialModel.currentConfigPath = target
-		} else {
-			// is not a symlink
-			debug("Config %s is not a symlink", configPath)
-			initialModel.currentConfigPath = configPath
-		}
-	}
-	debug("Current config: %s", initialModel.currentConfigPath)
 
 	for key, candidate := range candidates {
 		if candidate.FullPath == m.currentConfigPath {
@@ -186,7 +197,7 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 
 		case "enter":
-			return m, m.quit(symlinkConfigPathTo(m.candidates[m.cursor].FullPath))
+			return m, m.quit(m.symlinkConfigPathTo(m.candidates[m.cursor].FullPath))
 		}
 	}
 
@@ -195,15 +206,16 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m *model) View() string {
-	if m.quitting {
-		return m.farewell
-	}
-
 	// The header
 	s := ""
 	for _, meta := range m.meta {
 		s += meta + "\n"
 	}
+	if m.quitting {
+		s += m.farewell
+		return s
+	}
+
 	s += "What kubeconfig you want to use?\n\n"
 
 	// Iterate over our candidates
@@ -235,6 +247,30 @@ func (m *model) View() string {
 	// The footer
 	s += Subtle("\nj/k, up/down: select • enter: choose • q, esc: quit\n")
 	return s
+}
+
+func init() {
+	flag.Usage = func() {
+		_, _ = fmt.Fprintf(flag.CommandLine.Output(), `Usage of kubectl-cf:
+
+  cf           Select kubeconfig interactively
+  cf [config]  Select kubeconfig directly
+  cf -         Switch to the previous kubeconfig
+`)
+		flag.PrintDefaults()
+	}
+
+	flag.Parse()
+
+	// ensure config dir exists
+	if _, err := os.Lstat(cfDir); err != nil {
+		if os.IsNotExist(err) {
+			addDebugMessage("Default config dir %s not exist, creating", cfDir)
+			magicconch.Must(os.Mkdir(cfDir, 0755))
+		} else {
+			panic(err)
+		}
+	}
 }
 
 func main() {
