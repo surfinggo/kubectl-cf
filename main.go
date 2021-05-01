@@ -96,7 +96,8 @@ func (m *model) Init() tea.Cmd {
 			initialModel.currentConfigPath = target
 		} else {
 			addDebugMessage("The symlink is not a symlink")
-			initialModel.currentConfigPath = configPath
+			return m.quit(Warning(fmt.Sprintf("I'm sorry but %s must be a symlink to use kubectl-cf, "+
+				"please move it to other place like ~/.kube/default.kubeconfig", configPath)))
 		}
 	}
 	addDebugMessage("Current using kubeconfig: %s", initialModel.currentConfigPath)
