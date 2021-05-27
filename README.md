@@ -19,11 +19,9 @@ kubeconfig (or multiple kubeconfig files), you should use https://github.com/ahm
 
 ### Install Manually
 
-First, download tar file from the release page: https://github.com/spongeprojects/kubectl-cf/releases.
+First, download tar file from the [release page](https://github.com/spongeprojects/kubectl-cf/releases).
 
-After unzip the tar file, you'll get the executable file named `kubectl-cf`.
-
-Put it in any place you want as long as it's in your `PATH`. It can be called directly by typing `kubectl-cf`, or as
+After downloading the tar file, extract it, then put `kubectl-cf` in your `PATH`. It can be called directly by typing `kubectl-cf`, or as
 a [kubectl plugin](https://kubernetes.io/docs/tasks/extend-kubectl/kubectl-plugins/) `kubectl cf`, because it has the
 prefix `kubectl-`.
 
