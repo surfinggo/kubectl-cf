@@ -1,8 +1,8 @@
 # kubectl-cf
 
 [![Go Report Card](https://goreportcard.com/badge/github.com/spongeprojects/kubectl-cf)](https://goreportcard.com/report/github.com/spongeprojects/kubectl-cf)
-![](https://img.shields.io/github/license/spongeprojects/kubectl-cf)
-![](https://img.shields.io/github/v/release/spongeprojects/kubectl-cf)
+[![License](https://img.shields.io/github/license/spongeprojects/kubectl-cf?color=blue)](https://github.com/spongeprojects/kubectl-cf/blob/main/LICENSE)
+[![Releases](https://img.shields.io/github/v/release/spongeprojects/kubectl-cf)](https://github.com/spongeprojects/kubectl-cf/releases)
 
 Faster way to switch between kubeconfig files (not contexts).
 
