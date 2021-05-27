@@ -1,5 +1,7 @@
 # kubectl-cf
 
+![](https://img.shields.io/github/v/release/spongeprojects/kubectl-cf)
+
 Faster way to switch between kubeconfig files (not contexts).
 
 ![demo.gif](https://github.com/spongeprojects/kubectl-cf/blob/main/assets/demo.gif?raw=true)
