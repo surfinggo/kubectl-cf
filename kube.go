@@ -13,7 +13,7 @@ type Candidate struct {
 }
 
 // KubeconfigFilenamePattern defines the name pattern of kubeconfig files
-var KubeconfigFilenamePattern = regexp.MustCompile("^(.*)\\.kubeconfig$")
+var KubeconfigFilenamePattern = regexp.MustCompile("^(.*)\\.(kubeconfig|config)$")
 
 // ListKubeconfigCandidatesInDir lists all files in dir that matches KubeconfigFilenamePattern
 func ListKubeconfigCandidatesInDir(dir string) ([]Candidate, error) {
@@ -37,7 +37,7 @@ func ListKubeconfigCandidatesInDir(dir string) ([]Candidate, error) {
 		}
 
 		matches := KubeconfigFilenamePattern.FindStringSubmatch(file.Name())
-		if len(matches) == 2 {
+		if len(matches) >= 2 {
 			files = append(files, Candidate{
 				Name:     matches[1],
 				FullPath: path.Join(dir, file.Name()),
