@@ -1,10 +1,11 @@
 package main
 
 import (
-	"github.com/pkg/errors"
 	"io/ioutil"
-	"path"
+	"path/filepath"
 	"regexp"
+
+	"github.com/pkg/errors"
 )
 
 type Candidate struct {
@@ -31,7 +32,7 @@ func ListKubeconfigCandidatesInDir(dir string) ([]Candidate, error) {
 		if file.Name() == "config" {
 			files = append(files, Candidate{
 				Name:     file.Name(),
-				FullPath: path.Join(dir, file.Name()),
+				FullPath: filepath.Join(dir, file.Name()),
 			})
 			continue
 		}
@@ -40,7 +41,7 @@ func ListKubeconfigCandidatesInDir(dir string) ([]Candidate, error) {
 		if len(matches) >= 2 {
 			files = append(files, Candidate{
 				Name:     matches[1],
-				FullPath: path.Join(dir, file.Name()),
+				FullPath: filepath.Join(dir, file.Name()),
 			})
 		}
 	}

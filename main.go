@@ -3,12 +3,13 @@ package main
 import (
 	"flag"
 	"fmt"
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/spongeprojects/magicconch"
 	"io/ioutil"
 	"os"
-	"path"
+	"path/filepath"
 	"strings"
+
+	tea "github.com/charmbracelet/bubbletea"
+	"github.com/spongeprojects/magicconch"
 )
 
 const (
@@ -39,10 +40,10 @@ var initialModel = &model{}
 
 var (
 	homeDir           = HomeDir()
-	kubeDir           = path.Join(homeDir, ".kube")
-	defaultConfigPath = path.Join(kubeDir, "config")
-	configPath        = path.Join(kubeDir, "config") // same as defaultConfigPath for now, maybe allow user to specify
-	cfDir             = path.Join(kubeDir, "kubectl-cf")
+	kubeDir           = filepath.Join(homeDir, ".kube")
+	defaultConfigPath = filepath.Join(kubeDir, "config")
+	configPath        = filepath.Join(kubeDir, "config") // same as defaultConfigPath for now, maybe allow user to specify
+	cfDir             = filepath.Join(kubeDir, "kubectl-cf")
 )
 
 func (m *model) quit(farewell string) tea.Cmd {
@@ -55,7 +56,7 @@ func (m *model) quit(farewell string) tea.Cmd {
 }
 
 func (m *model) symlinkConfigPathTo(name string) string {
-	magicconch.Must(os.WriteFile(path.Join(cfDir, PreviousKubeconfigFullPath), []byte(m.currentConfigPath), 0644))
+	magicconch.Must(os.WriteFile(filepath.Join(cfDir, PreviousKubeconfigFullPath), []byte(m.currentConfigPath), 0644))
 
 	err := Symlink(name, configPath)
 	if err != nil {
@@ -101,7 +102,7 @@ func (m *model) Init() tea.Cmd {
 	addDebugMessage("Current using kubeconfig: %s", initialModel.currentConfigPath)
 
 	if debug {
-		f, err := os.Open(path.Join(cfDir, PreviousKubeconfigFullPath))
+		f, err := os.Open(filepath.Join(cfDir, PreviousKubeconfigFullPath))
 		if err != nil {
 			if !os.IsNotExist(err) {
 				panic(err)
@@ -116,7 +117,7 @@ func (m *model) Init() tea.Cmd {
 
 	if search := flag.Arg(0); search != "" {
 		if search == "-" {
-			f, err := os.Open(path.Join(cfDir, PreviousKubeconfigFullPath))
+			f, err := os.Open(filepath.Join(cfDir, PreviousKubeconfigFullPath))
 			if err != nil {
 				if !os.IsNotExist(err) {
 					panic(err)
